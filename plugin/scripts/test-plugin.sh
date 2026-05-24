@@ -629,6 +629,50 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# 14. Cross-model consensus mode
+# ---------------------------------------------------------------------------
+echo "Cross-model consensus mode"
+
+if grep -q "Cross-Model Consensus Gate" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md has Cross-Model Consensus Gate header"
+else
+  fail "skills/critique/SKILL.md missing Cross-Model Consensus Gate header"
+fi
+
+for bucket in "CONSENSUS FAIL" "CONSENSUS PASS" "DISPUTED" "CODEX-ONLY FAIL"; do
+  if grep -q "$bucket" "skills/critique/SKILL.md"; then
+    pass "skills/critique/SKILL.md documents bucket: $bucket"
+  else
+    fail "skills/critique/SKILL.md missing bucket: $bucket"
+  fi
+done
+
+if grep -qE '"consensus":\s*true' "CLAUDE.md"; then
+  pass "plugin/CLAUDE.md documents \"consensus\": true config"
+else
+  fail "plugin/CLAUDE.md missing \"consensus\": true config documentation"
+fi
+
+if grep -q "consensus_model" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md references consensus_model config key"
+else
+  fail "skills/critique/SKILL.md missing consensus_model config reference"
+fi
+
+if grep -q "consensus_plans" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md gates plan critiques behind consensus_plans"
+else
+  fail "skills/critique/SKILL.md missing consensus_plans gate"
+fi
+
+if grep -q "codex-error-" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md documents codex-error-<timestamp>.txt fallback log"
+else
+  fail "skills/critique/SKILL.md missing codex-error fallback log path"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo "═══════════════════════════════════════"

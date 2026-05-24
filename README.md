@@ -55,6 +55,7 @@ Or single session: `claude --plugin-dir ~/.claude/plugins/devils-advocate-elixir
 | Slash command | Natural language |
 |---|---|
 | `/devils-advocate:critique` | "critique" or "critique this plan" |
+| `/devils-advocate:critique --consensus` | "critique with consensus" (Claude → Codex → Claude reconciliation) |
 | `/devils-advocate:log` | "show critique log" |
 
 ### `/devils-advocate:critique`
@@ -140,6 +141,47 @@ The critique skill automatically discovers your project's documented standards b
 - **`code_search` call graph** — When `.code_search/surrealdb.rocksdb` exists at the project root, `code_search code search/calls-to/calls-from/depends-on` is preferred over raw `grep` for pattern and impact analysis. Falls back to `grep` if absent.
 - **Existing patterns** — Utilities, helpers, and context-module functions already in your codebase that the critiqued code might be duplicating.
 - **Architectural boundaries** — Context modules, Plug pipelines, Absinthe middleware, behaviour modules, and supervision trees that indicate intentional boundaries. If 5+ instances in your codebase do something one way, that's the established pattern: violations fail even if undocumented.
+
+## Consensus Mode
+
+Run a Claude → Codex → Claude reconciliation loop for higher-confidence critiques. Opt in by either:
+
+- Passing `--consensus` (or `consensus`, `cross-model`, `--cross-model`) on the slash command, or
+- Setting `"consensus": true` at the top level of `.devils-advocate/config.json`.
+
+```json
+{
+  "hooks": {"pre-commit-warning": false, "plan-file-detect": false},
+  "consensus": true,
+  "consensus_model": "gpt-5-codex"
+}
+```
+
+`consensus_model` is optional and is forwarded to `codex exec -m <model>`. Omit it to use the local `codex` CLI's default.
+
+### The three rounds
+
+1. **Claude initial critique** — Runs Steps 1–4 normally, holds the PASS/FAIL list internally, does not write to `.devils-advocate/logs/` yet.
+2. **Codex adversarial pass** — Shells out to the local `codex` CLI (use `codex --help` to confirm the invocation; if you have a `codex-review` skill installed, the critique prefers its pattern). Codex evaluates every criterion independently AND tags each Round 1 FAIL as `CONFIRM`, `DISPUTE`, or `EXTEND` (better fix). Codex must return strict JSON.
+3. **Claude reconciliation** — Buckets every finding:
+   - **CONSENSUS FAIL** — both models flagged it (highest confidence, must fix)
+   - **CONSENSUS PASS** — both models cleared it
+   - **DISPUTED** — exactly one model flagged it; surfaced, not auto-fixed
+   - **CODEX-ONLY FAIL** — Round 1 missed it; Claude re-reads the cited `file:line` and either promotes to CONSENSUS FAIL or demotes to DISPUTED with a counter-reason
+   - Only Round 3 writes the final critique to `.devils-advocate/logs/` and appends the session log entry.
+
+### Cost and fallback
+
+Expect roughly 3× the single-model token spend per critique. The mode never crashes the critique:
+
+- Missing `codex` CLI → fall back to single-model with a `WARNING` line.
+- Malformed Codex JSON → retry once, then fall back; the raw response is logged to `.devils-advocate/logs/codex-error-<timestamp>.txt` for inspection.
+- Codex timeout (120s) → retry once with 180s, then fall back.
+- More than 50% of Round 1 findings disputed → surface `HIGH DISPUTE: ...`, do not fall back.
+- Network error → same as timeout.
+- Missing target file or permission error → Context Gate refuses before invoking Codex.
+
+Plan critiques stay single-model unless `--consensus-plans` (or `consensus_plans: true` in config) is set explicitly, since plans are usually short and the extra round is expensive.
 
 ## Session Log & Hooks
 

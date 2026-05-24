@@ -13,7 +13,7 @@ The plugin follows the Claude Code plugin structure:
 - **`plugin/.claude-plugin/plugin.json`** — Plugin metadata (name, version, description). Version here is the source of truth.
 - **`.claude-plugin/marketplace.json`** — Marketplace registry entry (lives at repo root, not inside `plugin/`). Source points to `./plugin`. Version must stay in sync with `plugin.json`.
 - **`skills/`** — Each subdirectory contains a `SKILL.md` file that defines a slash command:
-  - `critique/` → `/devils-advocate:critique` — Binary pass/fail critique of code or plan documents. Auto-detects target type. 24 criteria for code across 8 dimensions, 26 criteria for plans across 11 dimensions.
+  - `critique/` → `/devils-advocate:critique` — Binary pass/fail critique of code or plan documents. Auto-detects target type. 24 criteria for code across 8 dimensions, 26 criteria for plans across 11 dimensions. Optional `--consensus` mode runs a Claude → Codex → Claude reconciliation loop.
   - `log/` → `/devils-advocate:log` — Display session history
 - **`hooks/HOOKS.md`** — Companion documentation explaining the inline hook logic step-by-step (hooks are `node -e` one-liners due to plugin path constraints).
 - **`hooks/hooks.json`** — Registers two hooks:
@@ -27,6 +27,7 @@ The plugin follows the Claude Code plugin structure:
 - **Two criteria sets** — Code critiques use 24 criteria across 8 dimensions (Correctness, Security, Quality, Performance, Consistency, Idiomatic Elixir, Integration, Architecture). Plan critiques use 26 criteria across 11 dimensions (Completeness, Correctness, Testability, Security, Consistency, Simplicity, Dependencies, Resilience, Idiomatic Elixir, Integration, Architecture).
 - **Auto-detection** — The critique skill determines whether it's reviewing code or a plan based on conversation context. No explicit mode flag needed. A `mix.exs` / `.ex` / `.exs` / `.heex` path activates Elixir code-critique mode.
 - **Elixir thinking-skills and `code_search`** — When critiquing inside an Elixir project, the critique skill globs for `claude-code-elixir` thinking-skills (`elixir-thinking`, `phoenix-thinking`, `ecto-thinking`, `otp-thinking`, `oban-thinking`) so it can cite their rule names in FAIL messages. When a `.code_search/surrealdb.rocksdb` index exists, `code_search code search/calls-to/calls-from/depends-on` is preferred over raw `grep` for pattern and impact analysis. Both fall back gracefully if absent.
+- **Cross-model consensus mode** — The critique skill supports a Claude → Codex → Claude reconciliation loop, opt-in via `--consensus` (or `consensus`/`cross-model`/`--cross-model`) on the slash command or `"consensus": true` in `.devils-advocate/config.json`. Round 1 is Claude's normal critique, Round 2 shells out to the local `codex` CLI, Round 3 is Claude's reconciliation into CONSENSUS FAIL / CONSENSUS PASS / DISPUTED / CODEX-ONLY FAIL buckets. Consensus mode falls back to single-model with a `WARNING` line if the `codex` CLI is missing, malformed, or times out — it never crashes the critique. Plan critiques stay single-model unless `--consensus-plans` or `consensus_plans: true` is set, since the extra round roughly triples token spend.
 - **SKILL.md frontmatter** — Each skill has YAML frontmatter with `name` and `description`. The `description` field must be short enough to avoid `ENAMETOOLONG` errors during plugin installation (this was a real bug, see commit `b381119`).
 - **Session log** — The critique skill appends entries to `.devils-advocate/session.md` in the user's project (not this repo). Entries include git SHA, timestamp, check number, and pass count. The log skill only reads, never writes.
 - **Individual log files** — The critique skill also writes the full formatted output to `.devils-advocate/logs/check-{N}-critique-{YYYY-MM-DD}-{HHMM}.md`. This preserves the complete critique for later reference. The log skill lists available log files.
@@ -39,6 +40,20 @@ The plugin follows the Claude Code plugin structure:
 - **Evidence requirement** — Every FAIL must cite `file:line` references. Results without evidence are invalid.
 - **Unverified section** — Mandatory in every critique. Must list at least one thing not checked.
 - **Version syncing** — When bumping versions, update both `plugin.json` and `marketplace.json`.
+
+### Consensus mode config
+
+Opt in per-project by adding the following to `.devils-advocate/config.json`:
+
+```json
+{
+  "hooks": {"pre-commit-warning": false, "plan-file-detect": false},
+  "consensus": true,
+  "consensus_model": "gpt-5-codex"
+}
+```
+
+`consensus_model` is optional and is passed to `codex exec -m <model>`. If omitted, the local `codex` CLI's default model is used. `consensus_plans` (boolean) gates consensus mode for plan critiques separately and defaults to `false`.
 
 ## Working in This Repo
 
@@ -56,4 +71,4 @@ This plugin was renamed from `confidence-loops` / `confidence-loop` to `devils-a
 
 v3.0.0 consolidated four scoring skills (`critique`, `critique-plan`, `pre`, `second-opinion`) into a single `critique` skill with binary pass/fail evaluation. Percentage scoring was removed entirely.
 
-v4.0.0 swapped JS/TS examples and `npm`/`tsc` verification commands for `mix`-native equivalents, expanded the criteria sets to 24 code (across 8 dimensions including a new Idiomatic Elixir dimension) and 26 plan (across 11 dimensions including a new Idiomatic Elixir dimension), and wired Step 1 to load `claude-code-elixir` thinking-skills and prefer `code_search` over raw grep.
+v4.0.0 swapped JS/TS examples and `npm`/`tsc` verification commands for `mix`-native equivalents, expanded the criteria sets to 24 code (across 8 dimensions including a new Idiomatic Elixir dimension) and 26 plan (across 11 dimensions including a new Idiomatic Elixir dimension), wired Step 1 to load `claude-code-elixir` thinking-skills and prefer `code_search` over raw grep, and added the opt-in cross-model consensus mode (Claude → Codex → Claude).

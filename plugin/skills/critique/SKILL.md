@@ -48,6 +48,88 @@ Run: touch .devils-advocate/.commit-reviewed`
 
 **Fallback:** If the Agent tool is unavailable or dispatch fails, proceed with inline critique but prepend a warning: `WARNING: Self-critique, author bias may be present.`
 
+### Step 0c: Cross-Model Consensus Gate
+
+Activate **consensus mode** when any of the following is true:
+
+1. The slash-command argument contains `consensus`, `--consensus`, `cross-model`, or `--cross-model` (case-insensitive). Example: `/devils-advocate:critique --consensus`.
+2. `.devils-advocate/config.json` contains `"consensus": true` at the top level (peer of the existing `"hooks"` block).
+
+Otherwise run single-model as normal — this gate is additive.
+
+For plan critiques, consensus mode is gated separately behind `--consensus-plans` on the command line or `"consensus_plans": true` in config. Default plan flow stays single-model since plans are short and the extra round is expensive.
+
+When consensus mode is active, wrap whichever execution path (inline or subagent) the Independence Gate chose with a three-round loop:
+
+**Round 1 — Claude initial critique.** Run Steps 1–4 as normal. Produce the standard binary PASS/FAIL list with `file:line` and `Fix:`. Hold the output internally; do not write to `.devils-advocate/logs/` yet.
+
+**Round 2 — Codex adversarial pass.** Shell out to the local `codex` CLI with the target, the Step 1 standards-discovery summary, the Step 4 criteria block, and Round 1's findings. Codex independently evaluates every criterion AND, for every Round 1 FAIL, declares `CONFIRM` (same finding), `DISPUTE` (it does not see the issue — explain why), or `EXTEND` (the issue is real but the fix is wrong — provide a corrected `Fix:`). Codex must also surface any criterion it would mark FAIL that Round 1 marked PASS.
+
+Use the project's existing `codex-review` skill pattern if it is locatable at `~/.claude/skills/codex-review/SKILL.md` or `~/.claude/plugins/**/codex-review/SKILL.md` — its invocation is known to work on the user's machine. Otherwise run `codex --help` to confirm flags and use a shape similar to:
+
+```bash
+codex exec -m "${consensus_model:-}" - <<'PROMPT'
+You are running an adversarial binary critique against an Elixir project.
+
+Target: <relative path or description>
+
+Project standards summary (from CLAUDE.md, AGENTS.md, ADRs, code_search dominant patterns):
+<<<...condensed by Claude...>>>
+
+Criteria to evaluate (each must return PASS or FAIL with file:line + Fix:):
+<<<...full criteria block from Step 4...>>>
+
+Round 1 (Claude) findings:
+<<<...JSON of Claude's PASS/FAIL list with evidence and fixes...>>>
+
+Tasks:
+1. Independently evaluate every criterion against the target. Return your own PASS/FAIL for each.
+2. For every Round 1 FAIL, declare CONFIRM, DISPUTE (with reason), or EXTEND (with corrected Fix:).
+3. Surface any criterion you would mark FAIL that Round 1 marked PASS.
+
+Output STRICT JSON:
+{
+  "codex_findings": [
+    {"criterion": "no-injection", "result": "FAIL", "file": "lib/...", "line": 62, "fix": "..."}
+  ],
+  "round1_responses": [
+    {"criterion": "edge-cases", "stance": "CONFIRM"},
+    {"criterion": "input-validated", "stance": "DISPUTE", "reason": "..."},
+    {"criterion": "no-injection", "stance": "EXTEND", "fix": "..."}
+  ],
+  "codex_only_fails": [
+    {"criterion": "doc-discipline", "file": "lib/...", "line": 12, "fix": "..."}
+  ]
+}
+PROMPT
+```
+
+`consensus_model` comes from `.devils-advocate/config.json` (`consensus_model` key) when set. Do not hardcode a model name in the prompt. Do not pipe API keys or env vars into the invocation — `codex` handles its own auth.
+
+**Round 3 — Claude reconciliation.** Read Codex's response. Compare against Round 1. Bucket every disagreement:
+
+- **CONSENSUS FAIL** — both models flagged it (highest confidence, must fix).
+- **CONSENSUS PASS** — both models cleared it.
+- **DISPUTED** — exactly one model flagged it (surface; do not auto-fix).
+- **CODEX-ONLY FAIL** — Round 1 missed it; Claude re-reads the cited `file:line` and judges. If accepted, promote to CONSENSUS FAIL. If rejected, demote to DISPUTED with Claude's counter-reason.
+
+Only Round 3 writes to `.devils-advocate/logs/` and appends the session log entry. Claude's reconciliation pass is authoritative.
+
+**Failure modes (must handle, do not crash the critique):**
+
+| Failure | Behavior |
+|---|---|
+| `codex` CLI not found in PATH | Skip Round 2 and Round 3. Run single-model. Prepend: `WARNING: Consensus mode requested but Codex CLI not found. Falling back to single-model critique.` |
+| Codex returns non-JSON / malformed JSON | Retry once. If still malformed, write the raw response to `.devils-advocate/logs/codex-error-<timestamp>.txt` and fall back with: `WARNING: Codex returned malformed output (logged to ...). Falling back to single-model.` |
+| Codex times out (>120 seconds) | Retry once with 180-second timeout. If still times out, fall back as above with a timeout-specific WARNING. |
+| Codex disputes >50% of Claude's findings | Do NOT fall back. Surface: `HIGH DISPUTE: Codex disputed N of M Claude findings. Manual review recommended.` Show all disputes in the Disputed section. |
+| Network error reaching Codex's backend | Same as timeout: retry once, then fall back. |
+| Consensus mode requested but Claude can't read the target (permission, missing file) | Refuse via Step 0b (Context Gate). Do not invoke Codex on missing context. |
+
+Do not silently downgrade. Every fallback path must produce a visible `WARNING` line at the top of the output. Do not let Codex's output overwrite Claude's. Do not cache Codex responses across runs.
+
+When consensus mode is active, use the consensus-mode output format described in **Output Format** below.
+
 ### Step 0b: Context Gate
 
 Before critiquing (whether inline or via subagent), verify you have sufficient context:
@@ -346,6 +428,50 @@ Failing criteria with fixes:
 Unverified:
 • Did not run `mix dialyzer` (PLT build cost; see verification-gate close)
 • Did not check whether `webhook_handler_test.exs` covers `{:error, :network_timeout}` path
+```
+
+### Output Format — Consensus Mode
+
+When Step 0c activated consensus mode, replace the standard banner with a Models header, show dual PASS/FAIL columns, replace `Result:` with `Consensus Result:`, and add three reconciliation sections:
+
+```
+DEVIL'S ADVOCATE CRITIQUE (Binary Eval — Elixir — Consensus Mode)
+════════════════════════════════════════════════════════════════
+
+Target: code changes for BackendAPI.Deals.WebhookHandler
+Models: Claude (Opus) → Codex (gpt-5-codex) → Claude (reconciliation)
+
+  Correctness:
+    tests-pass ............. PASS / PASS  (consensus)
+    logic-correct .......... PASS / PASS  (consensus)
+    edge-cases ............. FAIL / FAIL  (consensus — see below)
+
+  Security:
+    no-secrets ............. PASS / PASS  (consensus)
+    input-validated ........ FAIL / PASS  (DISPUTED — Codex argues changeset is implicit at line 78)
+    no-injection ........... FAIL / FAIL  (consensus — Codex extended the fix)
+
+  Idiomatic Elixir:
+    assertive-access ....... FAIL / FAIL  (consensus)
+
+  ...
+
+Consensus Result: 18/24 CONSENSUS PASS — 4 consensus FAILs, 1 codex-only accepted, 1 disputed
+
+Consensus FAILs (fix first):
+1. edge-cases: short-circuit empty payload at lib/backend_api/deals/webhook_handler.ex:45
+2. no-injection: replace String.to_atom at lib/backend_api/deals/webhook_handler.ex:62
+   (Codex extended the fix: use String.to_existing_atom inside a try/rescue, fallback to {:error, :unknown_event_type})
+3. assertive-access: pattern-match payload at lib/backend_api/deals/webhook_handler.ex:31
+4. pattern-exhaustive (codex-only, accepted): add {:error, _} clause to Repo.insert handler at lib/backend_api/deals/webhook_handler.ex:84
+
+Disputed (surface to user, no auto-fix):
+1. input-validated: Claude sees raw map at line 78; Codex argues upstream caller already cast.
+   Resolution path: read upstream caller and decide. If caller does NOT cast, this is a real FAIL.
+
+Unverified:
+• Did not run `mix dialyzer` (PLT build cost)
+• Codex round timed out once and was retried; second attempt succeeded
 ```
 
 ## Rules
