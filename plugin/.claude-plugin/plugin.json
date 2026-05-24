@@ -1,10 +1,10 @@
 {
-  "name": "devils-advocate",
-  "description": "Claude's harshest critic. Evidence required. Perfection impossible.",
-  "version": "3.2.0",
+  "name": "devils-advocate-elixir",
+  "description": "Adversarial binary critique for Elixir / Phoenix / LiveView / Ecto / OTP / Oban projects. Evidence required. Perfection impossible.",
+  "version": "4.0.0",
   "author": {
     "name": "Brandon Simpson"
   },
   "license": "MIT",
-  "keywords": ["confidence", "scoring", "self-critique", "quality", "devils-advocate"]
+  "keywords": ["elixir", "phoenix", "liveview", "ecto", "otp", "oban", "critique", "anti-patterns", "code-quality"]
 }

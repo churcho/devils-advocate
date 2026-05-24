@@ -1,7 +1,7 @@
 {
-  "name": "devils-advocate",
+  "name": "devils-advocate-elixir",
   "metadata": {
-    "description": "Claude's harshest critic. Evidence required. Perfection impossible."
+    "description": "Adversarial binary critique for Elixir / Phoenix / LiveView / Ecto / OTP / Oban projects. Evidence required. Perfection impossible."
   },
   "owner": {
     "name": "Brandon Simpson",
@@ -9,10 +9,10 @@
   },
   "plugins": [
     {
-      "name": "devils-advocate",
+      "name": "devils-advocate-elixir",
       "source": "./plugin",
-      "description": "Claude's harshest critic. Evidence required. Perfection impossible.",
-      "version": "3.2.0"
+      "description": "Adversarial binary critique for Elixir / Phoenix / LiveView / Ecto / OTP / Oban projects. Evidence required. Perfection impossible.",
+      "version": "4.0.0"
     }
   ]
 }
