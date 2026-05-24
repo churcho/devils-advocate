@@ -4,23 +4,11 @@
 
 # devils-advocate-elixir
 
-Claude's harshest critic, tuned for Elixir / Phoenix / LiveView / Ecto / OTP / Oban projects. A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin that critiques Claude's work with binary pass/fail evaluation. Every criterion either passes or fails, no percentage scores, no wiggle room.
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin that runs binary pass/fail critiques on Elixir / Phoenix / LiveView / Ecto / OTP / Oban code and plans. Every criterion either PASSes or FAILs. Every FAIL carries a `file:line` and a `Fix:`. No percentage scores, no calibration anchors, no hand-waving.
 
 ## Why
 
-Claude writes Elixir confidently. Too confidently. Left unchecked, it'll tell you everything looks wonderful right up until production catches fire. Inspired by [Confidently Wrong](https://brandon.cc/confidently-wrong).
-
-A [devil's advocate](https://en.wikipedia.org/wiki/Devil%27s_advocate) argues against a position not because they believe the other side, but to surface the holes everyone else missed. This plugin gives Claude that role: the skeptical colleague who says "yeah, but what about..." instead of "LGTM."
-
-Every criterion demands `file:line` evidence and a fix suggestion, no hand-waving, no vibes-based reviews.
-
-## What it catches
-
-It'll flag you for reinventing `Ecto.Changeset` validation, missing authorization middleware in Absinthe resolvers, duplicating a helper that already lives in a context module, plans where Oban job ordering is wrong, N+1 Ecto queries in `LiveView.mount/3`, and deploying schema changes without a migration rollback story. It knows when you're hand-rolling auth instead of using `Phoenix.Token` or a battle-tested library, when you're calling `String.to_atom/1` on user input, when a `GenServer` is wrapping a pure function for no reason, and when a `with` chain hides errors behind a tangled `else` block.
-
-New in v4.0: it catches **idiomatic Elixir violations** end-to-end. Non-assertive map access (`map[:key]` where the key is required), dynamic atom creation, unsupervised tasks, raw SQL via `Ecto.Adapters.SQL.query!`, `raw/1` on user data in HEEx, `@doc` on private functions, and grouped aliases. It loads `claude-code-elixir` thinking-skills when present so it can cite their rule names instead of paraphrasing.
-
-It works on both code and plans, auto-detecting which criteria set to use based on what you're reviewing.
+Claude writes Elixir confidently. Too confidently. Left unchecked it'll tell you the code looks great right up until production catches fire. This plugin is the skeptical colleague who says "yeah, but what about..." instead of "LGTM," inspired by [Confidently Wrong](https://brandon.cc/confidently-wrong).
 
 ## Install
 
@@ -52,44 +40,44 @@ Or single session: `claude --plugin-dir ~/.claude/plugins/devils-advocate-elixir
 
 ## Commands
 
-| Slash command | Natural language |
+| Slash command | What you get |
 |---|---|
-| `/devils-advocate:critique` | "critique" or "critique this plan" |
-| `/devils-advocate:critique --consensus` | "critique with consensus" (Claude → Codex → Claude reconciliation) |
-| `/devils-advocate:log` | "show critique log" |
+| `/devils-advocate:critique` | Binary PASS/FAIL critique of the most recent code change or plan document Claude wrote (or any path you point it at) |
+| `/devils-advocate:critique --consensus` | Same critique, but Claude's findings are independently checked by Codex and reconciled in a third Claude pass |
+| `/devils-advocate:log` | Session history: every check, its PASS count, the git SHA it was run against |
 
 ### `/devils-advocate:critique`
 
-Binary pass/fail critique across every dimension that matters. Auto-detects whether you're reviewing code or a plan document.
+Auto-detects whether the target is code or a plan and runs the matching criteria set. When Claude wrote the target in the same conversation, it dispatches an independent subagent so the reviewer never sees the author's reasoning, only the artifact and the codebase.
 
-**Independence gate:** When critiquing work Claude wrote in the same conversation, it automatically dispatches an independent subagent to avoid author bias. The reviewer never sees the author's reasoning, only the artifact and codebase.
+Things it catches: hand-rolling auth instead of using `Phoenix.Token`, calling `String.to_atom/1` on user input, a `GenServer` wrapping a pure function, a `with` chain hiding errors behind a tangled `else`, reinventing `Ecto.Changeset` validation, missing authorization middleware in Absinthe resolvers, duplicating a helper that already lives in a context module, plans where Oban job ordering is wrong, N+1 queries in `LiveView.mount/3`, schema changes shipped without a rollback story, non-assertive map access where the key is required, `raw/1` on user data in HEEx, `@doc` on private functions, grouped aliases.
 
-**Code critique (24 criteria, 8 dimensions):**
+**Code critique — 24 criteria across 8 dimensions:**
 
-- **Correctness** — Tests pass (`mix test`)? Logic matches `@doc`/`@spec`? Edge cases (nil, empty, oversized) handled?
-- **Security** — No hardcoded secrets, input validated via `Ecto.Changeset` / `NimbleOptions`, no SQL/atom/cmd injection, auth enforced in Plug / Absinthe middleware?
-- **Quality** — No dead code (unused aliases, commented blocks, unreferenced `defp`), no `TODO`/`raise "not implemented"`, every `{:error, _}` propagated or logged, no god-modules / primitive obsession / boolean obsession?
-- **Performance** — No N+1 Ecto queries, no `Repo.all` returning unbounded rows in request paths, no synchronous DB/HTTP in `LiveView.mount/3` or `handle_event/3`?
-- **Consistency** — `@spec` on every public function, schema field types match migration column types, naming follows project namespace and predicate-with-`?` conventions, patterns follow what 5+ examples elsewhere in the codebase do?
-- **Idiomatic Elixir** — Assertive map access (`map.key` over `map[:key]` for required keys), clean `with` chains (no complex `else`), no `String.to_atom/1` on dynamic input, exhaustive case/with on multi-shape returns?
-- **Integration** — Aliases resolve, no grouped `alias M.{A, B}`, new public functions covered by `DataCase` tests, no whole-suite regressions?
-- **Architecture** — Contexts own Repo access, schemas don't bypass changesets, no try/rescue hiding validation skips, no `GenServer` wrapping a pure function?
+- **Correctness**: `mix test` passes against the changed surface, function bodies match their `@doc`/`@spec`, edge cases (nil, empty, oversized) handled.
+- **Security**: no hardcoded secrets, external input validated via `Ecto.Changeset` / `NimbleOptions`, no SQL / atom / command injection, Plug or Absinthe middleware enforces auth on protected operations.
+- **Quality**: no unused aliases or `defp`, no `TODO` / `raise "not implemented"`, every `{:error, _}` propagated or logged, no god-modules, primitive obsession, or boolean obsession.
+- **Performance**: no N+1 Ecto queries, no `Repo.all` returning unbounded rows in request paths, no synchronous DB or HTTP in `LiveView.mount/3` or `handle_event/3`.
+- **Consistency**: `@spec` on every public function, schema field types match migration column types, naming follows project namespace, predicates end in `?`, and code follows whatever pattern 5+ examples elsewhere use.
+- **Idiomatic Elixir**: assertive map access for required keys, clean `with` chains (no complex `else`), no `String.to_atom/1` on dynamic input, exhaustive case/with on multi-shape returns.
+- **Integration**: aliases resolve, no grouped `alias M.{A, B}`, new public functions have a `DataCase` test, whole-suite `mix test` still green.
+- **Architecture**: contexts own Repo access, schemas don't bypass changesets, no `try/rescue` hiding validation skips, no `GenServer` wrapping a pure function.
 
-**Plan critique (26 criteria, 11 dimensions):**
+**Plan critique — 26 criteria across 11 dimensions:**
 
-- **Completeness** — Requirements covered, no placeholders, edge cases addressed, migration files / rollback strategy / backfill workers named?
-- **Correctness** — Hex package APIs verified against hexdocs.pm for the version in `mix.lock`, Ecto/Phoenix/Oban patterns match the corresponding thinking-skill guidance?
-- **Testability** — Each task names a test file and assertion shape, `mix test <path>` or `LiveViewTest` strategy stated, tests use the project's `DataCase`?
-- **Security** — Secrets handled via config providers, each external input has a named `Ecto.Changeset` / `NimbleOptions` / pattern-match boundary, Plug / Absinthe middleware named for protected operations?
-- **Consistency** — `@spec` named for each new public function, module names follow project namespace?
-- **Simplicity** — No `GenServer` where a function suffices, no behaviour where one implementation exists, established libraries (Ecto, Oban, Cachex, FunWithFlags, Mox) used for solved problems?
-- **Dependencies** — Tasks ordered correctly, Hex packages and version constraints verified to exist?
-- **Resilience** — Schema migrations have a `down` story, Oban backfills idempotent, query cost (indexes) and LiveView re-render scope accounted for?
-- **Idiomatic Elixir** — Background work names the Oban worker module, queue, uniqueness constraints, retry policy, and idempotency strategy?
-- **Integration** — Import paths reference real modules, plan follows the project's context/controller/LiveView/resolver layering?
-- **Architecture** — No bypassing context modules to hit Repo directly, no band-aid `try/rescue`, new FunWithFlags flags cite `docs/feature-flags.md`?
+- **Completeness**: requirements covered, no placeholders, edge cases addressed, migration file / rollback strategy / backfill worker named when schema changes.
+- **Correctness**: Hex APIs verified against hexdocs.pm for the version pinned in `mix.lock`; Ecto / Phoenix / Oban patterns match the corresponding `*-thinking` skill.
+- **Testability**: each task names a test file and assertion shape, `mix test <path>` or `LiveViewTest` strategy stated, tests use the project's `DataCase`.
+- **Security**: secrets via config providers, every external input has a named `Ecto.Changeset` / `NimbleOptions` / pattern-match boundary, Plug or Absinthe middleware named for protected operations.
+- **Consistency**: `@spec` named for each new public function, module names follow project namespace.
+- **Simplicity**: no `GenServer` where a function suffices, no behaviour where one implementation exists, established libraries (Ecto, Oban, Cachex, FunWithFlags, Mox) used for solved problems.
+- **Dependencies**: tasks ordered correctly, Hex packages and version constraints verified to exist.
+- **Resilience**: schema migrations have a `down` story, Oban backfills idempotent, query cost (indexes) and LiveView re-render scope accounted for.
+- **Idiomatic Elixir**: background work names the Oban worker module, queue, uniqueness constraints, retry policy, and idempotency strategy.
+- **Integration**: import paths reference real modules, plan follows the project's context / controller / LiveView / resolver layering.
+- **Architecture**: no bypassing context modules to hit Repo directly, no band-aid `try/rescue`, new FunWithFlags flags cite `docs/feature-flags.md`.
 
-Every FAIL comes with a `Fix:` suggestion. Example output:
+Every FAIL ships with a `Fix:` line. Example output for a code critique:
 
 ```
 DEVIL'S ADVOCATE CRITIQUE (Binary Eval — Elixir)
@@ -129,25 +117,25 @@ Failing criteria with fixes:
 
 ### `/devils-advocate:log`
 
-Session history: total checks, pass rate trend, and git SHA linking each check to a specific commit. Individual critiques are saved to `.devils-advocate/logs/` for later reference.
+Reads `.devils-advocate/session.md` and prints the running tally: number of checks, pass-rate trend, worst run, and the git SHA each check was run against. Lists the per-check files saved under `.devils-advocate/logs/`.
 
-## Standards & Project Awareness
+## Standards discovery
 
-The critique skill automatically discovers your project's documented standards before evaluating:
+Before evaluating anything, the critique skill builds context from the project:
 
-- **`CLAUDE.md` / `AGENTS.md`** — Your conventions, required patterns, and constraints. Standards violations cause relevant criteria to FAIL.
-- **ADR files** — Searched in `docs/adr/`, `docs/decisions/`, `adr/`, `decisions/`, `doc/architecture/decisions/`, and `**/ADR-*.md`.
-- **`claude-code-elixir` thinking-skills** — Globbed from `~/.claude/plugins/**/claude-code-elixir/elixir/*/skills/*-thinking/SKILL.md`. When present, the critique cites their rule names (e.g., `elixir-thinking: 'avoid non-assertive map access'`) in FAIL messages instead of paraphrasing.
-- **`code_search` call graph** — When `.code_search/surrealdb.rocksdb` exists at the project root, `code_search code search/calls-to/calls-from/depends-on` is preferred over raw `grep` for pattern and impact analysis. Falls back to `grep` if absent.
-- **Existing patterns** — Utilities, helpers, and context-module functions already in your codebase that the critiqued code might be duplicating.
-- **Architectural boundaries** — Context modules, Plug pipelines, Absinthe middleware, behaviour modules, and supervision trees that indicate intentional boundaries. If 5+ instances in your codebase do something one way, that's the established pattern: violations fail even if undocumented.
+- Reads `CLAUDE.md` and `AGENTS.md` for documented conventions. Standards violations cause the relevant criterion to FAIL.
+- Globs `docs/adr/`, `docs/decisions/`, `adr/`, `decisions/`, `doc/architecture/decisions/`, and `**/ADR-*.md` for architectural decision records.
+- Globs `~/.claude/plugins/**/claude-code-elixir/elixir/*/skills/*-thinking/SKILL.md`. When `elixir-thinking`, `phoenix-thinking`, `ecto-thinking`, `otp-thinking`, or `oban-thinking` is installed, FAIL messages cite the skill's rule name (`elixir-thinking: 'avoid non-assertive map access'`) instead of paraphrasing.
+- Prefers `code_search code search / calls-to / calls-from / depends-on` over raw `grep` when a `.code_search/surrealdb.rocksdb` index exists at the project root, then falls back to `grep`.
+- Scans for context modules, Plug pipelines, Absinthe middleware, behaviour modules, and supervision trees to map architectural boundaries.
+- Greps for how similar operations are done elsewhere. If 5+ instances of an operation use one approach (Repo access via context modules, resolver layering, Oban dispatch pattern), the change is held to that pattern even if no doc says so.
 
-## Consensus Mode
+## Consensus mode
 
-Run a Claude → Codex → Claude reconciliation loop for higher-confidence critiques. Opt in by either:
+Opt in to a Claude → Codex → Claude reconciliation loop for higher-confidence critiques. Trigger by either:
 
-- Passing `--consensus` (or `consensus`, `cross-model`, `--cross-model`) on the slash command, or
-- Setting `"consensus": true` at the top level of `.devils-advocate/config.json`.
+- Passing `--consensus` (or `consensus`, `cross-model`, `--cross-model`) on the command, or
+- Setting `"consensus": true` at the top level of `.devils-advocate/config.json`:
 
 ```json
 {
@@ -157,37 +145,33 @@ Run a Claude → Codex → Claude reconciliation loop for higher-confidence crit
 }
 ```
 
-`consensus_model` is optional and is forwarded to `codex exec -m <model>`. Omit it to use the local `codex` CLI's default.
+`consensus_model` is forwarded to `codex exec -m <model>`. Omit it to use the local `codex` CLI's default. Plan critiques stay single-model unless `--consensus-plans` or `"consensus_plans": true` is set, since plans are short and the extra round triples token spend.
 
-### The three rounds
+The three rounds:
 
-1. **Claude initial critique** — Runs Steps 1–4 normally, holds the PASS/FAIL list internally, does not write to `.devils-advocate/logs/` yet.
-2. **Codex adversarial pass** — Shells out to the local `codex` CLI (use `codex --help` to confirm the invocation; if you have a `codex-review` skill installed, the critique prefers its pattern). Codex evaluates every criterion independently AND tags each Round 1 FAIL as `CONFIRM`, `DISPUTE`, or `EXTEND` (better fix). Codex must return strict JSON.
-3. **Claude reconciliation** — Buckets every finding:
-   - **CONSENSUS FAIL** — both models flagged it (highest confidence, must fix)
-   - **CONSENSUS PASS** — both models cleared it
-   - **DISPUTED** — exactly one model flagged it; surfaced, not auto-fixed
-   - **CODEX-ONLY FAIL** — Round 1 missed it; Claude re-reads the cited `file:line` and either promotes to CONSENSUS FAIL or demotes to DISPUTED with a counter-reason
-   - Only Round 3 writes the final critique to `.devils-advocate/logs/` and appends the session log entry.
+1. **Claude initial critique** runs Steps 1–4 normally, holds the PASS/FAIL list internally, and does not write the log yet.
+2. **Codex adversarial pass** shells out to the local `codex` CLI. Codex independently evaluates every criterion and tags each Round 1 FAIL as `CONFIRM`, `DISPUTE`, or `EXTEND` (better fix). Output is strict JSON.
+3. **Claude reconciliation** buckets findings into `CONSENSUS FAIL`, `CONSENSUS PASS`, `DISPUTED`, and `CODEX-ONLY FAIL`. Claude re-reads cited `file:line`s for codex-only fails and either promotes them to consensus or demotes to disputed. Round 3 is authoritative and is the only round that writes to `.devils-advocate/logs/` or appends the session log.
 
-### Cost and fallback
+Fallback behavior (the mode never crashes the critique):
 
-Expect roughly 3× the single-model token spend per critique. The mode never crashes the critique:
-
-- Missing `codex` CLI → fall back to single-model with a `WARNING` line.
-- Malformed Codex JSON → retry once, then fall back; the raw response is logged to `.devils-advocate/logs/codex-error-<timestamp>.txt` for inspection.
-- Codex timeout (120s) → retry once with 180s, then fall back.
-- More than 50% of Round 1 findings disputed → surface `HIGH DISPUTE: ...`, do not fall back.
+- Missing `codex` CLI → single-model with a `WARNING` line.
+- Malformed Codex JSON → retry once, then fall back; raw response saved to `.devils-advocate/logs/codex-error-<timestamp>.txt`.
+- Timeout (120s) → retry once with 180s, then fall back.
+- More than 50% of findings disputed → no fallback; surfaces `HIGH DISPUTE: ...` so you do a manual pass.
 - Network error → same as timeout.
-- Missing target file or permission error → Context Gate refuses before invoking Codex.
+- Target unreadable → Context Gate refuses before invoking Codex.
 
-Plan critiques stay single-model unless `--consensus-plans` (or `consensus_plans: true` in config) is set explicitly, since plans are usually short and the extra round is expensive.
+## Session log & hooks
 
-## Session Log & Hooks
+Every check appends an entry to `.devils-advocate/session.md` with the check number, timestamp, git SHA, PASS count, and failing-criteria list. The full critique body is written to `.devils-advocate/logs/check-N-critique-YYYY-MM-DD-HHMM.md`. Add `.devils-advocate/` to your `.gitignore`.
 
-Every check is logged to `.devils-advocate/session.md` with a git SHA, so you can correlate results with specific commits. Full critique output is saved to individual files in `.devils-advocate/logs/`. Add `.devils-advocate/` to your `.gitignore`.
+Two hooks ship with the plugin:
 
-A pre-commit hook nudges you to run a critique before committing, the commit still proceeds, it's just a reminder. A plan-file hook suggests running `/devils-advocate:critique` when you write a plan file. Both hooks are configurable via `.devils-advocate/config.json`:
+- `pre-commit-warning` prints a non-blocking nudge on `git commit` if no `.devils-advocate/.commit-reviewed` marker exists. The commit proceeds either way; running `/devils-advocate:critique` creates the marker, which is then consumed on the next commit.
+- `plan-file-detect` suggests running `/devils-advocate:critique` whenever a file with `plan`/`plans` in its name or directory is written.
+
+Both are configurable in `.devils-advocate/config.json`:
 
 ```json
 {"hooks": {"pre-commit-warning": false, "plan-file-detect": false}}
