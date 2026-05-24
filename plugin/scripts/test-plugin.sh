@@ -19,8 +19,8 @@ trap cleanup EXIT
 PASS=0
 FAIL=0
 
-pass() { ((PASS++)); printf "  \033[32mPASS\033[0m  %s\n" "$1"; }
-fail() { ((FAIL++)); printf "  \033[31mFAIL\033[0m  %s\n" "$1"; }
+pass() { PASS=$((PASS + 1)); printf "  \033[32mPASS\033[0m  %s\n" "$1"; }
+fail() { FAIL=$((FAIL + 1)); printf "  \033[31mFAIL\033[0m  %s\n" "$1"; }
 
 echo "Devils Advocate — Test Suite"
 echo "═══════════════════════════════════════"
@@ -105,9 +105,9 @@ echo ""
 # ---------------------------------------------------------------------------
 # 3. Binary criteria completeness
 # ---------------------------------------------------------------------------
-echo "Binary criteria completeness — Code (20 criteria)"
+echo "Binary criteria completeness — Code (24 criteria)"
 
-CODE_CRITERIA="tests-pass logic-correct edge-cases no-secrets input-validated no-injection auth-enforced no-dead-code no-placeholders error-handling no-code-smell no-obvious-perf types-consistent naming-matches patterns-followed imports-correct tests-exist no-regressions boundaries-respected no-hacky-shortcuts"
+CODE_CRITERIA="tests-pass logic-correct edge-cases no-secrets input-validated no-injection auth-enforced no-dead-code no-placeholders error-handling no-code-smell no-obvious-perf types-consistent naming-matches patterns-followed assertive-access with-clauses-clean no-dynamic-atoms pattern-exhaustive imports-correct tests-exist no-regressions boundaries-respected no-hacky-shortcuts"
 for criterion in $CODE_CRITERIA; do
   if grep -q "$criterion" "skills/critique/SKILL.md"; then
     pass "code criterion: $criterion"
@@ -117,9 +117,9 @@ for criterion in $CODE_CRITERIA; do
 done
 echo ""
 
-echo "Binary criteria completeness — Plan (22 criteria)"
+echo "Binary criteria completeness — Plan (26 criteria)"
 
-PLAN_CRITERIA="req-coverage no-placeholders edge-cases api-verified patterns-correct tests-per-step verification no-secrets input-validated auth-designed types-consistent naming-matches no-overengineering no-reinvention correct-order deps-available rollback-plan perf-considered imports-correct follows-patterns boundaries-respected no-hacky-shortcuts"
+PLAN_CRITERIA="req-coverage no-placeholders edge-cases migration-plan api-verified patterns-correct tests-per-step verification datacase-used no-secrets input-validated auth-designed types-consistent naming-matches no-overengineering no-reinvention correct-order deps-available rollback-plan perf-considered oban-design imports-correct follows-patterns boundaries-respected no-hacky-shortcuts feature-flag-noted"
 for criterion in $PLAN_CRITERIA; do
   if grep -q "$criterion" "skills/critique/SKILL.md"; then
     pass "plan criterion: $criterion"
@@ -360,7 +360,7 @@ else
 fi
 
 # PreToolUse hook: silent on non-commit commands
-PRE_SILENT=$(echo '{"tool_input":{"command":"npm test"}}' | eval "$PRE_CMD" 2>&1)
+PRE_SILENT=$(echo '{"tool_input":{"command":"mix test"}}' | eval "$PRE_CMD" 2>&1)
 if [ -z "$PRE_SILENT" ]; then
   pass "PreToolUse hook silent on non-commit commands"
 else
@@ -625,6 +625,113 @@ if [ "$ARCH_COUNT" -ge 2 ]; then
   pass "Architecture dimension present in both code and plan criteria"
 else
   fail "Architecture dimension only appears $ARCH_COUNT time(s), expected 2+"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
+# 14. Cross-model consensus mode
+# ---------------------------------------------------------------------------
+echo "Cross-model consensus mode"
+
+if grep -q "Cross-Model Consensus Gate" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md has Cross-Model Consensus Gate header"
+else
+  fail "skills/critique/SKILL.md missing Cross-Model Consensus Gate header"
+fi
+
+for bucket in "CONSENSUS FAIL" "CONSENSUS PASS" "DISPUTED" "CODEX-ONLY FAIL"; do
+  if grep -q "$bucket" "skills/critique/SKILL.md"; then
+    pass "skills/critique/SKILL.md documents bucket: $bucket"
+  else
+    fail "skills/critique/SKILL.md missing bucket: $bucket"
+  fi
+done
+
+if grep -qE '"consensus":\s*true' "CLAUDE.md"; then
+  pass "plugin/CLAUDE.md documents \"consensus\": true config"
+else
+  fail "plugin/CLAUDE.md missing \"consensus\": true config documentation"
+fi
+
+if grep -q "consensus_model" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md references consensus_model config key"
+else
+  fail "skills/critique/SKILL.md missing consensus_model config reference"
+fi
+
+if grep -q "consensus_plans" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md gates plan critiques behind consensus_plans"
+else
+  fail "skills/critique/SKILL.md missing consensus_plans gate"
+fi
+
+if grep -q "codex-error-" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md documents codex-error-<timestamp>.txt fallback log"
+else
+  fail "skills/critique/SKILL.md missing codex-error fallback log path"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
+# 15. Consensus-mode security hardening
+# ---------------------------------------------------------------------------
+echo "Consensus-mode security hardening"
+
+# consensus_model allowlist regex
+if grep -qE '\^\[A-Za-z0-9\._\-\]\+\$' "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md pins consensus_model allowlist regex (^[A-Za-z0-9._-]+$)"
+else
+  fail "skills/critique/SKILL.md missing consensus_model allowlist regex"
+fi
+
+# UNTRUSTED fencing markers
+if grep -q "UNTRUSTED_BEGIN" "skills/critique/SKILL.md" && grep -q "UNTRUSTED_END" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md fences untrusted content with UNTRUSTED_BEGIN/UNTRUSTED_END markers"
+else
+  fail "skills/critique/SKILL.md missing UNTRUSTED_BEGIN/UNTRUSTED_END fencing markers"
+fi
+
+# Secret redaction instruction
+if grep -q "\[REDACTED\]" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md documents [REDACTED] sanitization step"
+else
+  fail "skills/critique/SKILL.md missing [REDACTED] sanitization step"
+fi
+
+# Tempfile-based prompt construction (no heredoc-escape vector)
+if grep -qiE '(tempfile|mktemp)' "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md routes the Codex prompt through a tempfile (no heredoc-escape)"
+else
+  fail "skills/critique/SKILL.md missing tempfile-based prompt construction"
+fi
+
+# Pinned codex-review path (no wildcard delegation glob)
+if grep -qE '~/.claude/plugins/\*\*/codex-review/SKILL\.md' "skills/critique/SKILL.md" \
+  && ! grep -qE '^[^#]*do NOT use a wildcard' "skills/critique/SKILL.md"; then
+  fail "skills/critique/SKILL.md still uses wildcard codex-review glob without a 'do NOT use wildcard' warning"
+else
+  pass "skills/critique/SKILL.md pins codex-review delegation (no unguarded wildcard glob)"
+fi
+
+# Separate codex-disputes log path
+if grep -q "codex-disputes-" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md routes HIGH DISPUTE output to codex-disputes-<ts>.txt"
+else
+  fail "skills/critique/SKILL.md missing codex-disputes-<timestamp>.txt log path"
+fi
+
+# Log skill flags untrusted .txt files
+if grep -q "Untrusted" "skills/log/SKILL.md" && grep -q "codex-disputes" "skills/log/SKILL.md"; then
+  pass "skills/log/SKILL.md lists codex-error/codex-disputes under an Untrusted section"
+else
+  fail "skills/log/SKILL.md does not segregate codex-error/codex-disputes as untrusted"
+fi
+
+# Round 3 sanitizes Codex string fields before render
+if grep -qE '(strip lines that start with|Sanitize EVERY string|sanitiz)' "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md instructs Round 3 to sanitize Codex string fields"
+else
+  fail "skills/critique/SKILL.md missing Round 3 string-field sanitization"
 fi
 echo ""
 
