@@ -673,6 +673,69 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# 15. Consensus-mode security hardening
+# ---------------------------------------------------------------------------
+echo "Consensus-mode security hardening"
+
+# consensus_model allowlist regex
+if grep -qE '\^\[A-Za-z0-9\._\-\]\+\$' "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md pins consensus_model allowlist regex (^[A-Za-z0-9._-]+$)"
+else
+  fail "skills/critique/SKILL.md missing consensus_model allowlist regex"
+fi
+
+# UNTRUSTED fencing markers
+if grep -q "UNTRUSTED_BEGIN" "skills/critique/SKILL.md" && grep -q "UNTRUSTED_END" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md fences untrusted content with UNTRUSTED_BEGIN/UNTRUSTED_END markers"
+else
+  fail "skills/critique/SKILL.md missing UNTRUSTED_BEGIN/UNTRUSTED_END fencing markers"
+fi
+
+# Secret redaction instruction
+if grep -q "\[REDACTED\]" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md documents [REDACTED] sanitization step"
+else
+  fail "skills/critique/SKILL.md missing [REDACTED] sanitization step"
+fi
+
+# Tempfile-based prompt construction (no heredoc-escape vector)
+if grep -qiE '(tempfile|mktemp)' "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md routes the Codex prompt through a tempfile (no heredoc-escape)"
+else
+  fail "skills/critique/SKILL.md missing tempfile-based prompt construction"
+fi
+
+# Pinned codex-review path (no wildcard delegation glob)
+if grep -qE '~/.claude/plugins/\*\*/codex-review/SKILL\.md' "skills/critique/SKILL.md" \
+  && ! grep -qE '^[^#]*do NOT use a wildcard' "skills/critique/SKILL.md"; then
+  fail "skills/critique/SKILL.md still uses wildcard codex-review glob without a 'do NOT use wildcard' warning"
+else
+  pass "skills/critique/SKILL.md pins codex-review delegation (no unguarded wildcard glob)"
+fi
+
+# Separate codex-disputes log path
+if grep -q "codex-disputes-" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md routes HIGH DISPUTE output to codex-disputes-<ts>.txt"
+else
+  fail "skills/critique/SKILL.md missing codex-disputes-<timestamp>.txt log path"
+fi
+
+# Log skill flags untrusted .txt files
+if grep -q "Untrusted" "skills/log/SKILL.md" && grep -q "codex-disputes" "skills/log/SKILL.md"; then
+  pass "skills/log/SKILL.md lists codex-error/codex-disputes under an Untrusted section"
+else
+  fail "skills/log/SKILL.md does not segregate codex-error/codex-disputes as untrusted"
+fi
+
+# Round 3 sanitizes Codex string fields before render
+if grep -qE '(strip lines that start with|Sanitize EVERY string|sanitiz)' "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md instructs Round 3 to sanitize Codex string fields"
+else
+  fail "skills/critique/SKILL.md missing Round 3 string-field sanitization"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo "═══════════════════════════════════════"

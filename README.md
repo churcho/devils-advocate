@@ -156,11 +156,24 @@ The three rounds:
 Fallback behavior (the mode never crashes the critique):
 
 - Missing `codex` CLI → single-model with a `WARNING` line.
+- `consensus_model` outside the `^[A-Za-z0-9._-]+$` allowlist → refuse to invoke Codex, fall back with a `WARNING` line.
 - Malformed Codex JSON → retry once, then fall back; raw response saved to `.devils-advocate/logs/codex-error-<timestamp>.txt`.
 - Timeout (120s) → retry once with 180s, then fall back.
-- More than 50% of findings disputed → no fallback; surfaces `HIGH DISPUTE: ...` so you do a manual pass.
+- More than 50% of findings disputed → no fallback. Full Codex response written to `.devils-advocate/logs/codex-disputes-<timestamp>.txt` (open in a plain text viewer, do not paste back into Claude). User-visible output shows only the dispute count and a pointer to the file.
 - Network error → same as timeout.
 - Target unreadable → Context Gate refuses before invoking Codex.
+
+### Security
+
+The Round 2 shell-out passes attacker-influenced material (the critiqued file, Claude's quoted evidence) to an external process and an external API. The mode hardens against both shell injection and prompt injection:
+
+- `consensus_model` is validated against the allowlist regex above before any shell invocation. A config value with shell metacharacters is refused, not escaped.
+- The prompt is written to a tempfile and streamed on stdin. The prompt body never appears in argv or in shell heredoc syntax, so a target file containing a literal heredoc terminator cannot break out.
+- Attacker-influenced blocks (target description, standards summary, Round 1 findings JSON) are wrapped in `<<<UNTRUSTED_BEGIN>>>` / `<<<UNTRUSTED_END>>>` markers. The Codex prompt's preamble tells the second model to treat content between markers as data, never instructions.
+- Round 1 evidence strings are scanned for the Step 3 secret patterns (`sk_`, `ghp_`, `xox`, `Bearer`, `AWS_SECRET`, `password.*=...`) before serialization. Any match is replaced with `[REDACTED]` so a leaked secret in the critiqued file does not get re-sent to OpenAI.
+- Round 3 sanitizes every string field in the Codex response before rendering or persisting: lines starting with `Ignore`, `Disregard`, `System:`, `Assistant:`, `User:`, or `<!--` are stripped, triple-backtick fences are collapsed, and each string is capped at 500 characters.
+- The session log entry contains criterion-level counts only. Free-form text from Codex stays out of `session.md` and out of the main per-check log.
+- The `codex-review` skill delegation, when used, pins to `~/.claude/skills/codex-review/SKILL.md` only. The wildcard path `~/.claude/plugins/**/codex-review/SKILL.md` is not honored, so an unrelated plugin cannot redefine the consensus invocation.
 
 ## Session log & hooks
 
