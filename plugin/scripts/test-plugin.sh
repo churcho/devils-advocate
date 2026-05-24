@@ -19,8 +19,8 @@ trap cleanup EXIT
 PASS=0
 FAIL=0
 
-pass() { ((PASS++)); printf "  \033[32mPASS\033[0m  %s\n" "$1"; }
-fail() { ((FAIL++)); printf "  \033[31mFAIL\033[0m  %s\n" "$1"; }
+pass() { PASS=$((PASS + 1)); printf "  \033[32mPASS\033[0m  %s\n" "$1"; }
+fail() { FAIL=$((FAIL + 1)); printf "  \033[31mFAIL\033[0m  %s\n" "$1"; }
 
 echo "Devils Advocate — Test Suite"
 echo "═══════════════════════════════════════"
@@ -105,9 +105,9 @@ echo ""
 # ---------------------------------------------------------------------------
 # 3. Binary criteria completeness
 # ---------------------------------------------------------------------------
-echo "Binary criteria completeness — Code (20 criteria)"
+echo "Binary criteria completeness — Code (24 criteria)"
 
-CODE_CRITERIA="tests-pass logic-correct edge-cases no-secrets input-validated no-injection auth-enforced no-dead-code no-placeholders error-handling no-code-smell no-obvious-perf types-consistent naming-matches patterns-followed imports-correct tests-exist no-regressions boundaries-respected no-hacky-shortcuts"
+CODE_CRITERIA="tests-pass logic-correct edge-cases no-secrets input-validated no-injection auth-enforced no-dead-code no-placeholders error-handling no-code-smell no-obvious-perf types-consistent naming-matches patterns-followed assertive-access with-clauses-clean no-dynamic-atoms pattern-exhaustive imports-correct tests-exist no-regressions boundaries-respected no-hacky-shortcuts"
 for criterion in $CODE_CRITERIA; do
   if grep -q "$criterion" "skills/critique/SKILL.md"; then
     pass "code criterion: $criterion"
@@ -117,9 +117,9 @@ for criterion in $CODE_CRITERIA; do
 done
 echo ""
 
-echo "Binary criteria completeness — Plan (22 criteria)"
+echo "Binary criteria completeness — Plan (26 criteria)"
 
-PLAN_CRITERIA="req-coverage no-placeholders edge-cases api-verified patterns-correct tests-per-step verification no-secrets input-validated auth-designed types-consistent naming-matches no-overengineering no-reinvention correct-order deps-available rollback-plan perf-considered imports-correct follows-patterns boundaries-respected no-hacky-shortcuts"
+PLAN_CRITERIA="req-coverage no-placeholders edge-cases migration-plan api-verified patterns-correct tests-per-step verification datacase-used no-secrets input-validated auth-designed types-consistent naming-matches no-overengineering no-reinvention correct-order deps-available rollback-plan perf-considered oban-design imports-correct follows-patterns boundaries-respected no-hacky-shortcuts feature-flag-noted"
 for criterion in $PLAN_CRITERIA; do
   if grep -q "$criterion" "skills/critique/SKILL.md"; then
     pass "plan criterion: $criterion"
@@ -360,7 +360,7 @@ else
 fi
 
 # PreToolUse hook: silent on non-commit commands
-PRE_SILENT=$(echo '{"tool_input":{"command":"npm test"}}' | eval "$PRE_CMD" 2>&1)
+PRE_SILENT=$(echo '{"tool_input":{"command":"mix test"}}' | eval "$PRE_CMD" 2>&1)
 if [ -z "$PRE_SILENT" ]; then
   pass "PreToolUse hook silent on non-commit commands"
 else

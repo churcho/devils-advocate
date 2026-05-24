@@ -11,9 +11,9 @@ PASS=0
 FAIL=0
 WARN=0
 
-pass() { ((PASS++)); printf "  \033[32mPASS\033[0m  %s\n" "$1"; }
-fail() { ((FAIL++)); printf "  \033[31mFAIL\033[0m  %s\n" "$1"; }
-warn() { ((WARN++)); printf "  \033[33mWARN\033[0m  %s\n" "$1"; }
+pass() { PASS=$((PASS + 1)); printf "  \033[32mPASS\033[0m  %s\n" "$1"; }
+fail() { FAIL=$((FAIL + 1)); printf "  \033[31mFAIL\033[0m  %s\n" "$1"; }
+warn() { WARN=$((WARN + 1)); printf "  \033[33mWARN\033[0m  %s\n" "$1"; }
 
 echo "Devils Advocate — Consistency Checks"
 echo "═══════════════════════════════════════"
@@ -68,18 +68,18 @@ echo ""
 
 # Count actual code criteria
 CODE_COUNT=$(sed -n '/Code Criteria/,/Plan Criteria/{ /^ *[a-z].*—/p; }' "skills/critique/SKILL.md" | wc -l | tr -d ' ')
-if [ "$CODE_COUNT" -eq 20 ]; then
-  pass "code criteria count is 20"
+if [ "$CODE_COUNT" -eq 24 ]; then
+  pass "code criteria count is 24"
 else
-  fail "code criteria count is $CODE_COUNT (expected 20)"
+  fail "code criteria count is $CODE_COUNT (expected 24)"
 fi
 
 # Count actual plan criteria
 PLAN_COUNT=$(sed -n '/Plan Criteria/,/Step 5/{ /^ *[a-z].*—/p; }' "skills/critique/SKILL.md" | wc -l | tr -d ' ')
-if [ "$PLAN_COUNT" -eq 22 ]; then
-  pass "plan criteria count is 22"
+if [ "$PLAN_COUNT" -eq 26 ]; then
+  pass "plan criteria count is 26"
 else
-  fail "plan criteria count is $PLAN_COUNT (expected 22)"
+  fail "plan criteria count is $PLAN_COUNT (expected 26)"
 fi
 
 # Architecture dimension present in both
@@ -89,12 +89,37 @@ else
   fail "skills/critique/SKILL.md missing Architecture dimension"
 fi
 
-# New criteria names present
+# Idiomatic Elixir dimension present in both
+if grep -q "Idiomatic Elixir:" "skills/critique/SKILL.md"; then
+  pass "skills/critique/SKILL.md has Idiomatic Elixir dimension"
+else
+  fail "skills/critique/SKILL.md missing Idiomatic Elixir dimension"
+fi
+
+# Original criteria names still present
 for criterion in boundaries-respected no-hacky-shortcuts no-code-smell; do
   if grep -q "$criterion" "skills/critique/SKILL.md"; then
     pass "criterion present: $criterion"
   else
     fail "criterion missing: $criterion"
+  fi
+done
+
+# New Elixir-specific code criteria
+for criterion in assertive-access with-clauses-clean no-dynamic-atoms pattern-exhaustive; do
+  if grep -q "$criterion" "skills/critique/SKILL.md"; then
+    pass "elixir code criterion present: $criterion"
+  else
+    fail "elixir code criterion missing: $criterion"
+  fi
+done
+
+# New Elixir-specific plan criteria
+for criterion in migration-plan datacase-used feature-flag-noted oban-design; do
+  if grep -q "$criterion" "skills/critique/SKILL.md"; then
+    pass "elixir plan criterion present: $criterion"
+  else
+    fail "elixir plan criterion missing: $criterion"
   fi
 done
 
